@@ -1,6 +1,6 @@
 /* ================================================================
-   ABSENSI KELAS DIGITAL - SCRIPT.JS
-   Sistem absensi berbasis QR Code, client-side, GitHub Pages ready
+   ABSENSI KELAS DIGITAL - SCRIPT.JS (VERSI PERBAIKAN KAMERA)
+   Fitur: Mirror Kamera Depan, Paksa Kamera Belakang, Ganti Kamera Live
 ================================================================ */
 
 /* ===== STATE ===== */
@@ -120,11 +120,6 @@ function getClassName(id) {
   return c ? c.name : '—';
 }
 
-function getActiveClassStudents() {
-  const cid = getActiveClassId();
-  return db.students.filter(s => s.classId === cid);
-}
-
 /* ===== TOAST ===== */
 function toast(msg, type = 'info', duration = 3000) {
   const container = document.getElementById('toastContainer');
@@ -180,7 +175,6 @@ function navigateTo(page) {
   document.getElementById('overlay').classList.remove('active');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 
-  // Refresh data per page
   if (page === 'dashboard') renderDashboard();
   if (page === 'siswa') renderStudents();
   if (page === 'kehadiran') renderAttendance();
@@ -238,7 +232,6 @@ function renderDashboard() {
   drawBarChart();
   drawDonutChart();
 
-  // Recent activity
   const recent = [...todayAtt].sort((a, b) => b.time.localeCompare(a.time)).slice(0, 8);
   const el = document.getElementById('recentActivity');
   if (!recent.length) {
@@ -300,7 +293,7 @@ function drawBarChart() {
     grad.addColorStop(0, '#3b82f6'); grad.addColorStop(1, '#06b6d4');
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.roundRect(x, y, barW, bh, 6);
+    if (ctx.roundRect) ctx.roundRect(x, y, barW, bh, 6); else ctx.rect(x, y, barW, bh);
     ctx.fill();
     ctx.fillStyle = getCssVar('--text-muted');
     ctx.font = '11px Inter';
@@ -358,7 +351,6 @@ function drawDonutChart() {
     start += angle;
   });
 
-  // Legend
   let ly = h - 10;
   ctx.font = '11px Inter'; ctx.textAlign = 'left';
   let lx = 10;
@@ -376,34 +368,83 @@ function getCssVar(name) {
 }
 
 /* ================================================================
-   SCAN PAGE
+   SCAN PAGE (PERBAIKAN KAMERA & MIRROR)
 ================================================================ */
 async function startScan() {
   if (isScanning) return;
   const readerEl = document.getElementById('qrReader');
-  if (scanner) { try { await scanner.clear(); } catch {} }
+  readerEl.innerHTML = '<p style="padding: 20px; color: #fff;">Memuat kamera...</p>';
+  
+  if (scanner) { 
+    try { await scanner.clear(); } catch (e) {} 
+  }
 
   try {
     scanner = new Html5Qrcode('qrReader');
-    const cameras = await Html5Qrcode.getCameras();
     const cameraSelect = document.getElementById('cameraSelect');
-    cameraSelect.innerHTML = cameras.map((c, i) => `<option value="${c.id}">${escapeHtml(c.label || `Kamera ${i + 1}`)}</option>`).join('');
-    const cameraId = cameraSelect.value || (cameras[0]?.id);
+    
+    let cameraId = null;
+    let cameras = [];
+    let isFrontCamera = false;
 
-    await scanner.start(
-      cameraId,
-      { fps: 10, qrbox: { width: 240, height: 240 } },
-      onScanSuccess,
-      () => {}
-    );
+    try {
+      cameras = await Html5Qrcode.getCameras();
+      if (cameras && cameras.length > 0) {
+        cameraSelect.innerHTML = cameras.map((c, i) => `<option value="${c.id}">${escapeHtml(c.label || `Kamera ${i + 1}`)}</option>`).join('');
+        
+        // Cari kamera belakang
+        const backCamera = cameras.find(c => 
+          c.label.toLowerCase().includes('back') || 
+          c.label.toLowerCase().includes('environment') || 
+          c.label.toLowerCase().includes('belakang') ||
+          c.label.toLowerCase().includes('rear')
+        );
+        
+        // Cari kamera depan
+        const frontCamera = cameras.find(c => 
+          c.label.toLowerCase().includes('front') || 
+          c.label.toLowerCase().includes('user') || 
+          c.label.toLowerCase().includes('depan')
+        );
+
+        if (backCamera) {
+          cameraId = backCamera.id;
+          cameraSelect.value = backCamera.id;
+          isFrontCamera = false;
+        } else if (frontCamera) {
+          cameraId = frontCamera.id;
+          cameraSelect.value = frontCamera.id;
+          isFrontCamera = true;
+        } else {
+          cameraId = cameraSelect.value;
+        }
+      }
+    } catch (e) {
+      console.warn('Gagal getCameras, mencoba fallback environment...', e);
+    }
+
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+    // Mulai scanner
+    if (cameraId) {
+      await scanner.start(cameraId, config, onScanSuccess, () => {});
+    } else {
+      await scanner.start({ facingMode: "environment" }, config, onScanSuccess, () => {});
+    }
+
+    // Terapkan efek mirror jika kamera depan
+    applyMirrorEffect(isFrontCamera);
+
     isScanning = true;
     document.getElementById('startScanBtn').disabled = true;
     document.getElementById('stopScanBtn').disabled = false;
     setScanResult('info', '📷 Kamera aktif. Silakan arahkan QR Code...');
+
   } catch (err) {
     console.error(err);
     setScanResult('error', '❌ Gagal akses kamera: ' + (err?.message || 'Periksa izin kamera'));
-    toast('Gagal akses kamera. Izinkan akses kamera di browser.', 'error');
+    toast('Gagal akses kamera.', 'error');
+    readerEl.innerHTML = '<p style="padding: 20px; color: #ef4444; text-align: center;">Kamera tidak tersedia / izin ditolak.</p>';
   }
 }
 
@@ -454,7 +495,6 @@ function onScanSuccess(decodedText) {
     return;
   }
 
-  // Determine status (on-time or late)
   const nowT = nowTimeStr();
   const s = db.settings;
   let late = false;
@@ -482,6 +522,18 @@ function onScanSuccess(decodedText) {
 
   renderScanSession();
   renderDashboard();
+}
+
+// Fungsi pembantu efek mirror
+function applyMirrorEffect(isFront) {
+  const video = document.querySelector('#qrReader video');
+  if (video) {
+    if (isFront) {
+      video.style.transform = 'scaleX(-1)';
+    } else {
+      video.style.transform = 'scaleX(1)';
+    }
+  }
 }
 
 function renderScanSession() {
@@ -546,7 +598,6 @@ function renderStudents() {
     </tr>
   `).join('');
 
-  // Also update class filter dropdown
   const classFilterEl = document.getElementById('studentClassFilter');
   if (classFilterEl) {
     const v = classFilterEl.value;
@@ -752,7 +803,6 @@ function renderAttendance() {
     </tr>
   `).join('');
 
-  // update class dropdown
   const classEl = document.getElementById('attClassFilter');
   if (classEl) {
     const v = classEl.value;
@@ -811,7 +861,6 @@ function confirmDeleteAttendance(id) {
   renderDashboard();
 }
 
-/* CSV Export for attendance */
 function exportAttendanceCSV() {
   if (!db.attendance.length) return toast('Tidak ada data untuk diekspor', 'warning');
   const rows = [['Tanggal', 'Jam', 'Nama', 'NIS', 'Kelas', 'Status', 'Metode', 'Terlambat']];
@@ -839,7 +888,6 @@ function renderHistory() {
   const classF = document.getElementById('historyClassFilter')?.value || '';
   const el = document.getElementById('historyContent');
 
-  // Determine date range
   const now = new Date();
   let startDate;
   if (range === 'daily') startDate = todayStr(now);
@@ -1197,7 +1245,6 @@ function applyTheme(theme) {
 function toggleTheme() {
   const cur = document.documentElement.getAttribute('data-theme') || 'light';
   applyTheme(cur === 'dark' ? 'light' : 'dark');
-  // Redraw charts after theme toggle
   setTimeout(() => { renderDashboard(); }, 100);
 }
 
@@ -1215,7 +1262,6 @@ function refreshAll() {
 }
 
 function bindEvents() {
-  // Navigation
   document.querySelectorAll('.nav-item').forEach(el => {
     el.addEventListener('click', (e) => {
       e.preventDefault();
@@ -1223,7 +1269,6 @@ function bindEvents() {
     });
   });
 
-  // Hamburger
   document.getElementById('hamburger').addEventListener('click', () => {
     document.getElementById('sidebar').classList.toggle('open');
     document.getElementById('overlay').classList.toggle('active');
@@ -1233,23 +1278,20 @@ function bindEvents() {
     document.getElementById('overlay').classList.remove('active');
   });
 
-  // Theme
   document.getElementById('themeToggle').addEventListener('click', toggleTheme);
 
-  // Class selector
   document.getElementById('activeClassSelect').addEventListener('change', (e) => {
     setActiveClass(e.target.value);
     refreshAll();
     toast('Kelas aktif diganti', 'info', 1500);
   });
 
-  // Modal close
   document.getElementById('modalClose').addEventListener('click', closeModal);
   document.getElementById('modalOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'modalOverlay') closeModal();
   });
 
-  // Scan
+  // SCAN
   document.getElementById('startScanBtn').addEventListener('click', startScan);
   document.getElementById('stopScanBtn').addEventListener('click', async () => {
     if (isScanning) {
@@ -1257,32 +1299,53 @@ function bindEvents() {
     }
   });
 
-  // Students
+  // GANTI KAMERA LIVE (TANPA HARUS STOP/START)
+  document.getElementById('cameraSelect').addEventListener('change', async (e) => {
+    if (isScanning && scanner) {
+      const newCameraId = e.target.value;
+      try {
+        await scanner.stop();
+        await scanner.clear();
+        scanner = new Html5Qrcode('qrReader');
+        await scanner.start(
+          newCameraId,
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          onScanSuccess,
+          () => {}
+        );
+        
+        // Deteksi apakah kamera baru adalah kamera depan
+        const label = e.target.options[e.target.selectedIndex].text.toLowerCase();
+        const isFront = label.includes('front') || label.includes('user') || label.includes('depan');
+        applyMirrorEffect(isFront);
+
+        toast('Kamera diganti', 'info');
+      } catch (err) {
+        toast('Gagal ganti kamera: ' + err.message, 'error');
+      }
+    }
+  });
+
   document.getElementById('addStudentBtn').addEventListener('click', () => showStudentForm(null));
   document.getElementById('studentSearch').addEventListener('input', renderStudents);
   document.getElementById('studentClassFilter').addEventListener('change', renderStudents);
   document.getElementById('studentStatusFilter').addEventListener('change', renderStudents);
 
-  // Attendance
   document.getElementById('attSearch').addEventListener('input', renderAttendance);
   document.getElementById('attDateFilter').addEventListener('change', renderAttendance);
   document.getElementById('attClassFilter').addEventListener('change', renderAttendance);
   document.getElementById('attStatusFilter').addEventListener('change', renderAttendance);
   document.getElementById('exportCsvBtn').addEventListener('click', exportAttendanceCSV);
 
-  // History
   document.getElementById('historyRange').addEventListener('change', renderHistory);
   document.getElementById('historyClassFilter').addEventListener('change', renderHistory);
 
-  // Report
   document.getElementById('generateReport').addEventListener('click', generateReport);
   document.getElementById('downloadReportCsv').addEventListener('click', downloadReportCSV);
   document.getElementById('printReport').addEventListener('click', printReport);
 
-  // Class
   document.getElementById('addClassBtn').addEventListener('click', () => showClassForm(null));
 
-  // Settings
   document.getElementById('saveSettings').addEventListener('click', saveSettings);
   document.getElementById('backupBtn').addEventListener('click', backupData);
   document.getElementById('restoreInput').addEventListener('change', (e) => {
@@ -1292,10 +1355,8 @@ function bindEvents() {
   });
   document.getElementById('resetBtn').addEventListener('click', resetAllData);
 
-  // Profile
   document.getElementById('saveProfile').addEventListener('click', saveProfile);
 
-  // Keyboard shortcut
   document.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key === 'k') { e.preventDefault(); navigateTo('siswa'); setTimeout(() => document.getElementById('studentSearch')?.focus(), 100); }
     if (e.ctrlKey && e.key === 'd') { e.preventDefault(); navigateTo('dashboard'); }
@@ -1304,18 +1365,11 @@ function bindEvents() {
     if (e.key === 'Escape') closeModal();
   });
 
-  // Redraw charts on resize
   let resizeTimer;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => renderDashboard(), 200);
   });
-}
-
-function seedDemoData() {
-  // Seed only if empty
-  if (db.students.length > 0) return;
-  // Not seeding — user will add their own. But add a helpful first class if none.
 }
 
 function init() {
