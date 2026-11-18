@@ -1,5 +1,5 @@
 /* ================================================================
-   ABSENSI KELAS DIGITAL - SCRIPT.JS (KARTU QR LENGKAP)
+   ABSENSI KELAS DIGITAL - SMK INSAN TAZAKKA
 ================================================================ */
 
 const STORE_KEYS = {
@@ -35,8 +35,11 @@ function saveData(key) {
 }
 
 function safeParse(raw, fallback) { if (!raw) return fallback; try { const v = JSON.parse(raw); return v ?? fallback; } catch { return fallback; } }
-function getDefaultSettings() { return { startTime: '07:00', endTime: '09:00', lateTime: '07:15', activeDate: todayStr(), schoolName: 'SMA Digital Nusantara', teacherName: 'Ibu Sari, S.Pd' }; }
-function getDefaultProfile() { return { school: 'SMA Digital Nusantara', npsn: '12345678', address: 'Jl. Pendidikan No. 1, Jakarta', headmaster: 'Drs. Bambang Sutrisno', teacher: 'Ibu Sari, S.Pd', year: '2024/2025' }; }
+
+// ====== NAMA SEKOLAH DEFAULT SUDAH DIGANTI ======
+function getDefaultSettings() { return { startTime: '07:00', endTime: '09:00', lateTime: '07:15', activeDate: todayStr(), schoolName: 'SMK Insan Tazakka', teacherName: 'Wali Kelas' }; }
+function getDefaultProfile() { return { school: 'SMK Insan Tazakka', npsn: '12345678', address: 'Alamat Sekolah', headmaster: 'Kepala Sekolah', teacher: 'Wali Kelas', year: '2024/2025' }; }
+
 function uid(prefix = '') { return prefix + Date.now().toString(36) + Math.random().toString(36).substr(2, 7); }
 function todayStr(d = new Date()) { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${day}`; }
 function nowTimeStr() { return new Date().toTimeString().slice(0, 5); }
@@ -278,11 +281,12 @@ function confirmDeleteStudent(id) {
 }
 
 // ==========================================
-// FITUR QR CODE (DENGAN NAMA, NIS, KELAS)
+// FITUR QR CODE (KARTU LENGKAP)
 // ==========================================
 function showQR(studentId) {
   const s = db.students.find(x => x.id === studentId); if (!s) return;
-  const schoolName = db.settings.schoolName || 'SEKOLAH DIGITAL';
+  // Mengambil nama sekolah dari pengaturan, default ke SMK Insan Tazakka
+  const schoolName = db.settings.schoolName || 'SMK INSAN TAZAKKA';
   
   const body = `
     <div id="qrCardContainer" style="text-align:center; padding:20px; background:#fff; border-radius:12px; border:2px solid #e2e8f0; max-width:320px; margin:0 auto;">
@@ -305,7 +309,6 @@ function showQR(studentId) {
   
   openModal('📱 Kartu QR Siswa', body, footer);
   
-  // Generate QR ke dalam target
   setTimeout(() => { 
     const target = document.getElementById('qrTarget'); 
     if (target && window.QRCode) { 
@@ -315,15 +318,13 @@ function showQR(studentId) {
   }, 50);
 }
 
-// Fungsi Helper untuk menggambar Kartu QR ke Canvas (untuk Download & Print)
 function generateCardCanvas(studentId, callback) {
   const s = db.students.find(x => x.id === studentId);
-  const schoolName = db.settings.schoolName || 'SEKOLAH DIGITAL';
+  const schoolName = db.settings.schoolName || 'SMK INSAN TAZAKKA';
   const qrCanvasElement = document.getElementById('qrTarget')?.querySelector('canvas');
   
   if (!qrCanvasElement) return toast('QR belum siap', 'error');
 
-  // Buat canvas baru untuk kartu
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   const width = 400;
@@ -331,65 +332,32 @@ function generateCardCanvas(studentId, callback) {
   canvas.width = width;
   canvas.height = height;
 
-  // Background Putih
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height);
+  ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 4; ctx.strokeRect(2, 2, width - 4, height - 4);
 
-  // Border Luar
-  ctx.strokeStyle = '#e2e8f0';
-  ctx.lineWidth = 4;
-  ctx.strokeRect(2, 2, width - 4, height - 4);
+  ctx.fillStyle = '#0b1b3a'; ctx.fillRect(0, 0, width, 70);
 
-  // Header Biru
-  ctx.fillStyle = '#0b1b3a';
-  ctx.fillRect(0, 0, width, 70);
-
-  // Teks Nama Sekolah
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 18px Inter, sans-serif';
-  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 18px Inter, sans-serif'; ctx.textAlign = 'center';
   ctx.fillText(schoolName.toUpperCase(), width / 2, 35);
-  ctx.font = '12px Inter, sans-serif';
-  ctx.fillStyle = '#93c5fd';
-  ctx.fillText('KARTU IDENTITAS SISWA', width / 2, 55);
+  ctx.font = '12px Inter, sans-serif'; ctx.fillStyle = '#93c5fd'; ctx.fillText('KARTU IDENTITAS SISWA', width / 2, 55);
 
-  // Gambar QR Code
   ctx.drawImage(qrCanvasElement, (width - 220) / 2, 100, 220, 220);
 
-  // Teks Nama Siswa
-  ctx.fillStyle = '#0f172a';
-  ctx.font = 'bold 22px Inter, sans-serif';
-  ctx.fillText(s.name, width / 2, 370);
+  ctx.fillStyle = '#0f172a'; ctx.font = 'bold 22px Inter, sans-serif'; ctx.fillText(s.name, width / 2, 370);
 
-  // Teks NIS
-  ctx.fillStyle = '#2563eb';
-  ctx.font = 'bold 16px Inter, sans-serif';
-  ctx.fillText(`NIS: ${s.nis}`, width / 2, 400);
+  ctx.fillStyle = '#2563eb'; ctx.font = 'bold 16px Inter, sans-serif'; ctx.fillText(`NIS: ${s.nis}`, width / 2, 400);
 
-  // Teks Kelas
-  ctx.fillStyle = '#64748b';
-  ctx.font = '14px Inter, sans-serif';
-  ctx.fillText(`Kelas: ${getClassName(s.classId)}`, width / 2, 425);
+  ctx.fillStyle = '#64748b'; ctx.font = '14px Inter, sans-serif'; ctx.fillText(`Kelas: ${getClassName(s.classId)}`, width / 2, 425);
 
-  // Garis pemisah
-  ctx.beginPath();
-  ctx.moveTo(50, 450);
-  ctx.lineTo(width - 50, 450);
-  ctx.strokeStyle = '#e2e8f0';
-  ctx.lineWidth = 1;
-  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(50, 450); ctx.lineTo(width - 50, 450); ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1; ctx.stroke();
 
-  // ID Unik kecil di bawah
-  ctx.fillStyle = '#94a3b8';
-  ctx.font = '10px monospace';
-  ctx.fillText(`ID: ${s.id}`, width / 2, 475);
+  ctx.fillStyle = '#94a3b8'; ctx.font = '10px monospace'; ctx.fillText(`ID: ${s.id}`, width / 2, 475);
 
   callback(canvas);
 }
 
 function downloadQR(studentId) {
   const s = db.students.find(x => x.id === studentId);
-  
   generateCardCanvas(studentId, (canvas) => {
     const a = document.createElement('a');
     a.href = canvas.toDataURL('image/png');
@@ -401,28 +369,13 @@ function downloadQR(studentId) {
 
 function printQR(studentId) {
   const s = db.students.find(x => x.id === studentId);
-  
   generateCardCanvas(studentId, (canvas) => {
     const imgData = canvas.toDataURL('image/png');
     const win = window.open('', '_blank');
     win.document.write(`
-      <html>
-      <head>
-        <title>Cetak QR - ${escapeHtml(s.name)}</title>
-        <style>
-          body { font-family: sans-serif; text-align: center; padding: 20px; }
-          img { max-width: 100%; height: auto; margin-top: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-          @media print {
-            body { padding: 0; }
-            img { box-shadow: none; margin: 0; }
-          }
-        </style>
-      </head>
-      <body>
-        <img src="${imgData}">
-        <script>window.onload=()=>{window.print();}<\/script>
-      </body>
-      </html>
+      <html><head><title>Cetak QR - ${escapeHtml(s.name)}</title>
+      <style>body { font-family: sans-serif; text-align: center; padding: 20px; } img { max-width: 100%; height: auto; margin-top: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); } @media print { body { padding: 0; } img { box-shadow: none; margin: 0; } }</style>
+      </head><body><img src="${imgData}"><script>window.onload=()=>{window.print();}<\/script></body></html>
     `);
     win.document.close();
   });
