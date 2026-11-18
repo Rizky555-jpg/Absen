@@ -1,5 +1,6 @@
 /* ================================================================
-   ABSENSI KELAS DIGITAL - SMK INSAN TAZAKKA (SINKRON PROFIL)
+   ABSENSI KELAS DIGITAL - SMK INSAN TAZAKKA
+   + Fitur Absensi Manual (Izin/Sakit/Alfa)
 ================================================================ */
 
 const STORE_KEYS = {
@@ -35,10 +36,8 @@ function saveData(key) {
 }
 
 function safeParse(raw, fallback) { if (!raw) return fallback; try { const v = JSON.parse(raw); return v ?? fallback; } catch { return fallback; } }
-
 function getDefaultSettings() { return { startTime: '07:00', endTime: '09:00', lateTime: '07:15', activeDate: todayStr(), schoolName: 'SMK Insan Tazakka', teacherName: 'Wali Kelas' }; }
 function getDefaultProfile() { return { school: 'SMK Insan Tazakka', npsn: '12345678', address: 'Alamat Sekolah', headmaster: 'Kepala Sekolah', teacher: 'Wali Kelas', year: '2024/2025' }; }
-
 function uid(prefix = '') { return prefix + Date.now().toString(36) + Math.random().toString(36).substr(2, 7); }
 function todayStr(d = new Date()) { const y = d.getFullYear(); const m = String(d.getMonth() + 1).padStart(2, '0'); const day = String(d.getDate()).padStart(2, '0'); return `${y}-${m}-${day}`; }
 function nowTimeStr() { return new Date().toTimeString().slice(0, 5); }
@@ -284,17 +283,13 @@ function confirmDeleteStudent(id) {
 // ==========================================
 function showQR(studentId) {
   const s = db.students.find(x => x.id === studentId); if (!s) return;
-  
-  // MENGAMBIL DARI PROFIL SEKOLAH, BUKAN PENGATURAN
   const schoolName = db.profile.school || 'SMK INSAN TAZAKKA';
   
   const body = `
     <div id="qrCardContainer" style="text-align:center; padding:20px; background:#fff; border-radius:12px; border:2px solid #e2e8f0; max-width:320px; margin:0 auto;">
       <h4 style="margin:0 0 5px 0; font-size:14px; color:#0b1b3a; text-transform:uppercase;">${escapeHtml(schoolName)}</h4>
       <p style="margin:0 0 15px 0; font-size:10px; color:#64748b;">Kartu Identitas Siswa</p>
-      
       <div id="qrTarget" style="display:inline-block; padding:10px; background:#fff; border:1px solid #e2e8f0; border-radius:8px;"></div>
-      
       <h3 style="margin:15px 0 2px 0; font-size:16px; color:#0f172a;">${escapeHtml(s.name)}</h3>
       <p style="margin:0; font-size:12px; font-weight:600; color:#2563eb;">NIS: ${escapeHtml(s.nis)}</p>
       <p style="margin:2px 0 0 0; font-size:12px; color:#64748b;">Kelas: ${escapeHtml(getClassName(s.classId))}</p>
@@ -320,10 +315,7 @@ function showQR(studentId) {
 
 function generateCardCanvas(studentId, callback) {
   const s = db.students.find(x => x.id === studentId);
-  
-  // MENGAMBIL DARI PROFIL SEKOLAH
   const schoolName = db.profile.school || 'SMK INSAN TAZAKKA';
-  
   const qrCanvasElement = document.getElementById('qrTarget')?.querySelector('canvas');
   if (!qrCanvasElement) return toast('QR belum siap', 'error');
 
@@ -334,23 +326,15 @@ function generateCardCanvas(studentId, callback) {
 
   ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height);
   ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 4; ctx.strokeRect(2, 2, width - 4, height - 4);
-
   ctx.fillStyle = '#0b1b3a'; ctx.fillRect(0, 0, width, 70);
-
   ctx.fillStyle = '#ffffff'; ctx.font = 'bold 18px Inter, sans-serif'; ctx.textAlign = 'center';
   ctx.fillText(schoolName.toUpperCase(), width / 2, 35);
   ctx.font = '12px Inter, sans-serif'; ctx.fillStyle = '#93c5fd'; ctx.fillText('KARTU IDENTITAS SISWA', width / 2, 55);
-
   ctx.drawImage(qrCanvasElement, (width - 220) / 2, 100, 220, 220);
-
   ctx.fillStyle = '#0f172a'; ctx.font = 'bold 22px Inter, sans-serif'; ctx.fillText(s.name, width / 2, 370);
-
   ctx.fillStyle = '#2563eb'; ctx.font = 'bold 16px Inter, sans-serif'; ctx.fillText(`NIS: ${s.nis}`, width / 2, 400);
-
   ctx.fillStyle = '#64748b'; ctx.font = '14px Inter, sans-serif'; ctx.fillText(`Kelas: ${getClassName(s.classId)}`, width / 2, 425);
-
   ctx.beginPath(); ctx.moveTo(50, 450); ctx.lineTo(width - 50, 450); ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1; ctx.stroke();
-
   ctx.fillStyle = '#94a3b8'; ctx.font = '10px monospace'; ctx.fillText(`ID: ${s.id}`, width / 2, 475);
 
   callback(canvas);
@@ -381,7 +365,9 @@ function printQR(studentId) {
   });
 }
 
-// KEHADIRAN
+// ==========================================
+// KEHADIRAN (TERMASUK ABSENSI MANUAL)
+// ==========================================
 function renderAttendance() {
   const search = (document.getElementById('attSearch')?.value || '').toLowerCase(); const dateF = document.getElementById('attDateFilter')?.value || ''; const classF = document.getElementById('attClassFilter')?.value || ''; const statusF = document.getElementById('attStatusFilter')?.value || '';
   let list = db.attendance.slice().sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
@@ -411,6 +397,86 @@ function deleteAttendance(id) {
 
 function confirmDeleteAttendance(id) {
   const a = db.attendance.find(x => x.id === id); db.attendance = db.attendance.filter(x => x.id !== id); saveData('attendance'); logActivity(`Hapus kehadiran ${a?.name || ''}`); toast('Catatan dihapus', 'success'); closeModal(); renderAttendance(); renderDashboard();
+}
+
+// FUNGSI BARU: ABSENSI MANUAL
+function showManualAttendanceForm() {
+  const today = todayStr();
+  let studentOptions = '<option value="">-- Pilih Siswa --</option>';
+  
+  // Tampilkan siswa yang BELUM absen hari ini
+  db.students.forEach(s => {
+    const already = db.attendance.find(a => a.studentId === s.id && a.date === today);
+    if (!already) {
+      studentOptions += `<option value="${s.id}">${escapeHtml(s.name)} (${escapeHtml(getClassName(s.classId))})</option>`;
+    }
+  });
+
+  if (studentOptions === '<option value="">-- Pilih Siswa --</option>') {
+    return toast('Semua siswa sudah memiliki catatan absensi hari ini.', 'info');
+  }
+
+  const body = `
+    <div class="form-group">
+      <label>Siswa</label>
+      <select id="manualStudent" class="input">${studentOptions}</select>
+    </div>
+    <div class="form-group">
+      <label>Status Kehadiran</label>
+      <select id="manualStatus" class="input">
+        <option value="Izin">Izin</option>
+        <option value="Sakit">Sakit</option>
+        <option value="Alfa">Alfa</option>
+        <option value="Hadir">Hadir (Susulan)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Tanggal</label>
+      <input type="date" id="manualDate" class="input" value="${today}">
+    </div>
+  `;
+  const footer = `
+    <button class="btn btn-secondary" onclick="closeModal()">Batal</button>
+    <button class="btn btn-primary" onclick="saveManualAttendance()">💾 Simpan Absensi</button>
+  `;
+  openModal('📝 Absensi Manual', body, footer);
+}
+
+function saveManualAttendance() {
+  const studentId = document.getElementById('manualStudent').value;
+  const status = document.getElementById('manualStatus').value;
+  const date = document.getElementById('manualDate').value;
+
+  if (!studentId) return toast('Pilih siswa terlebih dahulu', 'error');
+  if (!date) return toast('Tanggal wajib diisi', 'error');
+
+  const student = db.students.find(s => s.id === studentId);
+  if (!student) return;
+
+  const existing = db.attendance.find(a => a.studentId === studentId && a.date === date);
+  if (existing) return toast('Siswa ini sudah absen di tanggal tersebut', 'error');
+
+  const nowT = nowTimeStr();
+  const att = {
+    id: uid('att-'),
+    studentId: student.id,
+    name: student.name,
+    nis: student.nis,
+    classId: student.classId,
+    date: date,
+    time: nowT,
+    status: status,
+    method: 'Manual',
+    late: false
+  };
+
+  db.attendance.push(att);
+  saveData('attendance');
+  logActivity(`Absensi manual ${student.name} -> ${status}`);
+  toast(`Absensi ${student.name} (${status}) berhasil disimpan`, 'success');
+  closeModal();
+  renderAttendance();
+  renderDashboard();
 }
 
 function exportAttendanceCSV() {
@@ -503,9 +569,7 @@ function renderProfile() {
 
 function saveProfile() {
   db.profile = { school: document.getElementById('profileSchool').value, npsn: document.getElementById('profileNpsn').value, address: document.getElementById('profileAddress').value, headmaster: document.getElementById('profileHeadmaster').value, teacher: document.getElementById('profileTeacher').value, year: document.getElementById('profileYear').value };
-  saveData('profile'); toast('Profil sekolah disimpan', 'success');
-  // Auto-refresh agar QR langsung berubah
-  renderProfile();
+  saveData('profile'); toast('Profil sekolah disimpan', 'success'); renderProfile();
 }
 
 // BACKUP / RESTORE / RESET
@@ -575,6 +639,10 @@ function bindEvents() {
   document.getElementById('studentSearch').addEventListener('input', renderStudents);
   document.getElementById('studentClassFilter').addEventListener('change', renderStudents);
   document.getElementById('studentStatusFilter').addEventListener('change', renderStudents);
+  
+  // EVENT UNTUK ABSENSI MANUAL
+  document.getElementById('manualAttendanceBtn')?.addEventListener('click', showManualAttendanceForm);
+
   document.getElementById('attSearch').addEventListener('input', renderAttendance);
   document.getElementById('attDateFilter').addEventListener('change', renderAttendance);
   document.getElementById('attClassFilter').addEventListener('change', renderAttendance);
