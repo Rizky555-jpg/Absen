@@ -1,5 +1,5 @@
 /* ================================================================
-   ABSENSI KELAS DIGITAL - SMK INSAN TAZAKKA
+   ABSENSI KELAS DIGITAL - SMK INSAN TAZAKKA (SINKRON PROFIL)
 ================================================================ */
 
 const STORE_KEYS = {
@@ -36,7 +36,6 @@ function saveData(key) {
 
 function safeParse(raw, fallback) { if (!raw) return fallback; try { const v = JSON.parse(raw); return v ?? fallback; } catch { return fallback; } }
 
-// ====== NAMA SEKOLAH DEFAULT SUDAH DIGANTI ======
 function getDefaultSettings() { return { startTime: '07:00', endTime: '09:00', lateTime: '07:15', activeDate: todayStr(), schoolName: 'SMK Insan Tazakka', teacherName: 'Wali Kelas' }; }
 function getDefaultProfile() { return { school: 'SMK Insan Tazakka', npsn: '12345678', address: 'Alamat Sekolah', headmaster: 'Kepala Sekolah', teacher: 'Wali Kelas', year: '2024/2025' }; }
 
@@ -281,12 +280,13 @@ function confirmDeleteStudent(id) {
 }
 
 // ==========================================
-// FITUR QR CODE (KARTU LENGKAP)
+// FITUR QR CODE (KARTU LENGKAP & SINKRON PROFIL)
 // ==========================================
 function showQR(studentId) {
   const s = db.students.find(x => x.id === studentId); if (!s) return;
-  // Mengambil nama sekolah dari pengaturan, default ke SMK Insan Tazakka
-  const schoolName = db.settings.schoolName || 'SMK INSAN TAZAKKA';
+  
+  // MENGAMBIL DARI PROFIL SEKOLAH, BUKAN PENGATURAN
+  const schoolName = db.profile.school || 'SMK INSAN TAZAKKA';
   
   const body = `
     <div id="qrCardContainer" style="text-align:center; padding:20px; background:#fff; border-radius:12px; border:2px solid #e2e8f0; max-width:320px; margin:0 auto;">
@@ -320,17 +320,17 @@ function showQR(studentId) {
 
 function generateCardCanvas(studentId, callback) {
   const s = db.students.find(x => x.id === studentId);
-  const schoolName = db.settings.schoolName || 'SMK INSAN TAZAKKA';
-  const qrCanvasElement = document.getElementById('qrTarget')?.querySelector('canvas');
   
+  // MENGAMBIL DARI PROFIL SEKOLAH
+  const schoolName = db.profile.school || 'SMK INSAN TAZAKKA';
+  
+  const qrCanvasElement = document.getElementById('qrTarget')?.querySelector('canvas');
   if (!qrCanvasElement) return toast('QR belum siap', 'error');
 
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  const width = 400;
-  const height = 520;
-  canvas.width = width;
-  canvas.height = height;
+  const width = 400; const height = 520;
+  canvas.width = width; canvas.height = height;
 
   ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height);
   ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 4; ctx.strokeRect(2, 2, width - 4, height - 4);
@@ -504,6 +504,8 @@ function renderProfile() {
 function saveProfile() {
   db.profile = { school: document.getElementById('profileSchool').value, npsn: document.getElementById('profileNpsn').value, address: document.getElementById('profileAddress').value, headmaster: document.getElementById('profileHeadmaster').value, teacher: document.getElementById('profileTeacher').value, year: document.getElementById('profileYear').value };
   saveData('profile'); toast('Profil sekolah disimpan', 'success');
+  // Auto-refresh agar QR langsung berubah
+  renderProfile();
 }
 
 // BACKUP / RESTORE / RESET
