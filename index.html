@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>AbsensiKelas - Sistem Absensi Digital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+<!-- Loading Screen -->
+<div id="loader" class="loader-screen">
+  <div class="loader-box">
+    <div class="loader-spinner"></div>
+    <p>Memuat sistem...</p>
+  </div>
+</div>
+
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-logo">AK</div>
+    <div>
+      <h2>AbsensiKelas</h2>
+      <span>Digital Attendance</span>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="#dashboard" class="nav-item active" data-page="dashboard"><span class="nav-icon">📊</span><span>Dashboard</span></a>
+    <a href="#scan" class="nav-item" data-page="scan"><span class="nav-icon">📷</span><span>Scan Absensi</span></a>
+    <a href="#siswa" class="nav-item" data-page="siswa"><span class="nav-icon">👥</span><span>Data Siswa</span></a>
+    <a href="#kehadiran" class="nav-item" data-page="kehadiran"><span class="nav-icon">✅</span><span>Data Kehadiran</span></a>
+    <a href="#riwayat" class="nav-item" data-page="riwayat"><span class="nav-icon">🕐</span><span>Riwayat</span></a>
+    <a href="#laporan" class="nav-item" data-page="laporan"><span class="nav-icon">📄</span><span>Laporan</span></a>
+    <a href="#kelas" class="nav-item" data-page="kelas"><span class="nav-icon">🏫</span><span>Kelola Kelas</span></a>
+    <a href="#pengaturan" class="nav-item" data-page="pengaturan"><span class="nav-icon">⚙️</span><span>Pengaturan</span></a>
+    <a href="#profil" class="nav-item" data-page="profil"><span class="nav-icon">🏫</span><span>Profil Sekolah</span></a>
+  </nav>
+  <div class="sidebar-footer">
+    <button id="themeToggle" class="btn-icon" title="Mode Gelap/Terang">🌙</button>
+    <span>v1.0.0</span>
+  </div>
+</aside>
+
+<!-- Overlay for mobile -->
+<div class="overlay" id="overlay"></div>
+
+<!-- Main Content -->
+<main class="main-content">
+  <!-- Top Bar -->
+  <header class="topbar">
+    <button class="hamburger" id="hamburger">☰</button>
+    <div class="topbar-info">
+      <h1 id="pageTitle">Dashboard</h1>
+      <p id="pageSubtitle">Ringkasan kehadiran kelas</p>
+    </div>
+    <div class="topbar-right">
+      <div class="datetime-box">
+        <span id="currentDate">--</span>
+        <span id="currentTime">--</span>
+      </div>
+      <div class="class-selector">
+        <label>Aktif:</label>
+        <select id="activeClassSelect"></select>
+      </div>
+    </div>
+  </header>
+
+  <!-- PAGE: DASHBOARD -->
+  <section class="page active" id="page-dashboard">
+    <div class="stats-grid">
+      <div class="stat-card stat-total"><div class="stat-icon">👥</div><div class="stat-body"><p>Total Siswa</p><h3 id="statTotal">0</h3></div></div>
+      <div class="stat-card stat-hadir"><div class="stat-icon">✅</div><div class="stat-body"><p>Hadir</p><h3 id="statHadir">0</h3></div></div>
+      <div class="stat-card stat-izin"><div class="stat-icon">📝</div><div class="stat-body"><p>Izin</p><h3 id="statIzin">0</h3></div></div>
+      <div class="stat-card stat-sakit"><div class="stat-icon">🤒</div><div class="stat-body"><p>Sakit</p><h3 id="statSakit">0</h3></div></div>
+      <div class="stat-card stat-alfa"><div class="stat-icon">❌</div><div class="stat-body"><p>Alfa</p><h3 id="statAlfa">0</h3></div></div>
+      <div class="stat-card stat-percent"><div class="stat-icon">📈</div><div class="stat-body"><p>Kehadiran</p><h3 id="statPercent">0%</h3></div></div>
+    </div>
+
+    <div class="dashboard-row">
+      <div class="card chart-card">
+        <h3>📊 Statistik Kehadiran (7 Hari Terakhir)</h3>
+        <canvas id="chartBar" height="220"></canvas>
+      </div>
+      <div class="card donut-card">
+        <h3>🥧 Distribusi Hari Ini</h3>
+        <canvas id="chartDonut" height="220"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🕐 Aktivitas Absensi Terbaru</h3>
+      <div id="recentActivity" class="activity-list"><p class="empty-state">Belum ada aktivitas hari ini</p></div>
+    </div>
+  </section>
+
+  <!-- PAGE: SCAN -->
+  <section class="page" id="page-scan">
+    <div class="scan-wrapper">
+      <div class="card scan-card">
+        <h3>📷 Scan QR Code Siswa</h3>
+        <p class="muted">Arahkan QR Code ke kamera untuk mencatat kehadiran otomatis</p>
+        <div id="qrReader" class="qr-reader-box"></div>
+        <div class="camera-controls">
+          <select id="cameraSelect" class="input"></select>
+          <button id="startScanBtn" class="btn btn-primary">▶ Mulai Scan</button>
+          <button id="stopScanBtn" class="btn btn-danger" disabled>■ Stop Scan</button>
+        </div>
+        <div id="scanResult" class="scan-result"></div>
+      </div>
+      <div class="card">
+        <h3>📋 Absensi Hari Ini</h3>
+        <div id="scanSessionList" class="scan-session-list"><p class="empty-state">Belum ada siswa yang absen hari ini</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAGE: SISWA -->
+  <section class="page" id="page-siswa">
+    <div class="card">
+      <div class="card-header">
+        <h3>👥 Data Siswa</h3>
+        <button id="addStudentBtn" class="btn btn-primary">+ Tambah Siswa</button>
+      </div>
+      <div class="filter-row">
+        <input type="text" id="studentSearch" class="input" placeholder="🔍 Cari nama atau NIS...">
+        <select id="studentClassFilter" class="input"><option value="">Semua Kelas</option></select>
+        <select id="studentStatusFilter" class="input">
+          <option value="">Semua Status</option>
+          <option value="Aktif">Aktif</option>
+          <option value="Tidak Aktif">Tidak Aktif</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table class="table" id="studentTable">
+          <thead><tr><th>No</th><th>Nama</th><th>NIS</th><th>ID Unik</th><th>Kelas</th><th>Status</th><th>Aksi</th></tr></thead>
+          <tbody id="studentTableBody"><tr><td colspan="7" class="empty-state">Belum ada data siswa</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAGE: KEHADIRAN -->
+  <section class="page" id="page-kehadiran">
+    <div class="card">
+      <div class="card-header">
+        <h3>✅ Data Kehadiran</h3>
+        <button id="exportCsvBtn" class="btn btn-secondary">⬇ Ekspor CSV</button>
+      </div>
+      <div class="filter-row">
+        <input type="text" id="attSearch" class="input" placeholder="🔍 Cari nama...">
+        <input type="date" id="attDateFilter" class="input">
+        <select id="attClassFilter" class="input"><option value="">Semua Kelas</option></select>
+        <select id="attStatusFilter" class="input">
+          <option value="">Semua Status</option>
+          <option value="Hadir">Hadir</option><option value="Izin">Izin</option>
+          <option value="Sakit">Sakit</option><option value="Alfa">Alfa</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>No</th><th>Nama</th><th>NIS</th><th>Kelas</th><th>Tanggal</th><th>Jam</th><th>Status</th><th>Metode</th><th>Aksi</th></tr></thead>
+          <tbody id="attTableBody"><tr><td colspan="9" class="empty-state">Belum ada data kehadiran</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAGE: RIWAYAT -->
+  <section class="page" id="page-riwayat">
+    <div class="card">
+      <h3>🕐 Riwayat Kehadiran per Siswa</h3>
+      <div class="filter-row">
+        <select id="historyRange" class="input">
+          <option value="daily">Harian</option>
+          <option value="weekly">Mingguan</option>
+          <option value="monthly">Bulanan</option>
+        </select>
+        <select id="historyClassFilter" class="input"><option value="">Semua Kelas</option></select>
+      </div>
+      <div id="historyContent"><p class="empty-state">Belum ada riwayat</p></div>
+    </div>
+  </section>
+
+  <!-- PAGE: LAPORAN -->
+  <section class="page" id="page-laporan">
+    <div class="card">
+      <h3>📄 Laporan Absensi</h3>
+      <div class="report-controls">
+        <div class="form-group"><label>Dari Tanggal</label><input type="date" id="reportStart" class="input"></div>
+        <div class="form-group"><label>Sampai Tanggal</label><input type="date" id="reportEnd" class="input"></div>
+        <div class="form-group"><label>Kelas</label><select id="reportClass" class="input"><option value="">Semua Kelas</option></select></div>
+        <div class="form-group"><label>Siswa (opsional)</label><select id="reportStudent" class="input"><option value="">Semua Siswa</option></select></div>
+      </div>
+      <div class="report-buttons">
+        <button id="generateReport" class="btn btn-primary">📊 Generate Laporan</button>
+        <button id="downloadReportCsv" class="btn btn-secondary">⬇ Unduh CSV</button>
+        <button id="printReport" class="btn btn-secondary">🖨 Cetak</button>
+      </div>
+      <div id="reportOutput" class="report-output"></div>
+    </div>
+  </section>
+
+  <!-- PAGE: KELAS -->
+  <section class="page" id="page-kelas">
+    <div class="card">
+      <div class="card-header">
+        <h3>🏫 Kelola Kelas</h3>
+        <button id="addClassBtn" class="btn btn-primary">+ Tambah Kelas</button>
+      </div>
+      <div id="classList" class="class-list"></div>
+    </div>
+  </section>
+
+  <!-- PAGE: PENGATURAN -->
+  <section class="page" id="page-pengaturan">
+    <div class="card">
+      <h3>⚙️ Pengaturan Absensi</h3>
+      <div class="settings-grid">
+        <div class="form-group"><label>Jam Mulai Absensi</label><input type="time" id="setStartTime" class="input"></div>
+        <div class="form-group"><label>Jam Akhir Absensi</label><input type="time" id="setEndTime" class="input"></div>
+        <div class="form-group"><label>Batas Waktu Keterlambatan</label><input type="time" id="setLateTime" class="input"></div>
+        <div class="form-group"><label>Tanggal Aktif Absensi</label><input type="date" id="setActiveDate" class="input"></div>
+        <div class="form-group"><label>Nama Sekolah</label><input type="text" id="setSchoolName" class="input"></div>
+        <div class="form-group"><label>Nama Wali Kelas</label><input type="text" id="setTeacherName" class="input"></div>
+      </div>
+      <button id="saveSettings" class="btn btn-primary">💾 Simpan Pengaturan</button>
+    </div>
+    <div class="card">
+      <h3>💾 Backup & Restore Data</h3>
+      <p class="muted">⚠️ Data disimpan di LocalStorage browser ini saja. Tidak tersinkron ke perangkat lain.</p>
+      <div class="backup-buttons">
+        <button id="backupBtn" class="btn btn-primary">⬇ Backup JSON</button>
+        <label class="btn btn-secondary">
+          ⬆ Restore JSON
+          <input type="file" id="restoreInput" accept="application/json" hidden>
+        </label>
+        <button id="resetBtn" class="btn btn-danger">🗑 Reset Semua Data</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>📜 Riwayat Aktivitas Admin</h3>
+      <div id="activityLog" class="activity-list"></div>
+    </div>
+  </section>
+
+  <!-- PAGE: PROFIL -->
+  <section class="page" id="page-profil">
+    <div class="card">
+      <h3>🏫 Profil Sekolah</h3>
+      <div class="settings-grid">
+        <div class="form-group"><label>Nama Sekolah</label><input type="text" id="profileSchool" class="input"></div>
+        <div class="form-group"><label>NPSN</label><input type="text" id="profileNpsn" class="input"></div>
+        <div class="form-group"><label>Alamat</label><input type="text" id="profileAddress" class="input"></div>
+        <div class="form-group"><label>Kepala Sekolah</label><input type="text" id="profileHeadmaster" class="input"></div>
+        <div class="form-group"><label>Wali Kelas</label><input type="text" id="profileTeacher" class="input"></div>
+        <div class="form-group"><label>Tahun Ajaran</label><input type="text" id="profileYear" class="input"></div>
+      </div>
+      <button id="saveProfile" class="btn btn-primary">💾 Simpan Profil</button>
+    </div>
+  </section>
+</main>
+
+<!-- MODAL -->
+<div id="modalOverlay" class="modal-overlay">
+  <div class="modal" id="modal">
+    <div class="modal-header"><h3 id="modalTitle">Judul</h3><button id="modalClose" class="modal-close">✕</button></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer" id="modalFooter"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toastContainer" class="toast-container"></div>
+
+<script src="script.js"></script>
+</body>
+  </html>
