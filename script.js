@@ -1,5 +1,5 @@
 /* ================================================================
-   ABSENSI KELAS DIGITAL - SCRIPT.JS (FIX KAMERA "FACING BACK")
+   ABSENSI KELAS DIGITAL - SCRIPT.JS (KARTU QR LENGKAP)
 ================================================================ */
 
 const STORE_KEYS = {
@@ -128,7 +128,7 @@ function drawDonutChart() {
 
 function getCssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#888'; }
 
-// --- FITUR SCAN KAMERA ---
+// SCAN
 async function startScan() {
   if (isScanning) return;
   const readerEl = document.getElementById('qrReader');
@@ -138,57 +138,36 @@ async function startScan() {
   try {
     scanner = new Html5Qrcode('qrReader');
     const cameraSelect = document.getElementById('cameraSelect');
-    let cameraId = null;
-    let cameras = [];
-    let isFrontCamera = false;
+    let cameraId = null; let cameras = []; let isFrontCamera = false;
 
     try {
       cameras = await Html5Qrcode.getCameras();
       if (cameras && cameras.length > 0) {
         cameraSelect.innerHTML = cameras.map((c, i) => `<option value="${c.id}">${escapeHtml(c.label || `Kamera ${i + 1}`)}</option>`).join('');
-        
-        // PERBAIKAN: Deteksi lebih luas untuk kamera belakang
         const backCamera = cameras.find(c => {
           const label = c.label.toLowerCase();
-          return label.includes('back') || label.includes('facing back') || 
-                 label.includes('environment') || label.includes('belakang') || 
-                 label.includes('rear');
+          return label.includes('back') || label.includes('facing back') || label.includes('environment') || label.includes('belakang') || label.includes('rear');
         });
-        
         const frontCamera = cameras.find(c => {
           const label = c.label.toLowerCase();
           return label.includes('front') || label.includes('user') || label.includes('depan');
         });
 
-        if (backCamera) {
-          cameraId = backCamera.id;
-          cameraSelect.value = backCamera.id;
-          isFrontCamera = false;
-        } else if (frontCamera) {
-          cameraId = frontCamera.id;
-          cameraSelect.value = frontCamera.id;
-          isFrontCamera = true;
-        } else {
-          cameraId = cameraSelect.value;
-        }
+        if (backCamera) { cameraId = backCamera.id; cameraSelect.value = backCamera.id; isFrontCamera = false; }
+        else if (frontCamera) { cameraId = frontCamera.id; cameraSelect.value = frontCamera.id; isFrontCamera = true; }
+        else { cameraId = cameraSelect.value; }
       }
     } catch (e) { console.warn('Gagal getCameras:', e); }
 
     const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-
-    // Jalankan kamera
-    if (cameraId) {
-      await scanner.start(cameraId, config, onScanSuccess, () => {});
-    } else {
-      await scanner.start({ facingMode: "environment" }, config, onScanSuccess, () => {});
-    }
+    if (cameraId) { await scanner.start(cameraId, config, onScanSuccess, () => {}); }
+    else { await scanner.start({ facingMode: "environment" }, config, onScanSuccess, () => {}); }
 
     applyMirrorEffect(isFrontCamera);
     isScanning = true;
     document.getElementById('startScanBtn').disabled = true;
     document.getElementById('stopScanBtn').disabled = false;
     setScanResult('info', '📷 Kamera aktif. Silakan arahkan QR Code...');
-
   } catch (err) {
     console.error(err);
     setScanResult('error', '❌ Gagal akses kamera: ' + (err?.message || 'Periksa izin kamera'));
@@ -298,26 +277,155 @@ function confirmDeleteStudent(id) {
   closeModal(); renderStudents(); renderDashboard();
 }
 
-// QR CODE
+// ==========================================
+// FITUR QR CODE (DENGAN NAMA, NIS, KELAS)
+// ==========================================
 function showQR(studentId) {
   const s = db.students.find(x => x.id === studentId); if (!s) return;
-  const body = `<div style="text-align:center;"><p style="margin-bottom:12px;font-weight:600;">${escapeHtml(s.name)}</p><p class="muted" style="margin-bottom:16px;">${escapeHtml(s.nis)} • ${escapeHtml(getClassName(s.classId))}</p><div id="qrTarget" style="display:inline-block;padding:16px;background:#fff;border-radius:12px;"></div><p class="muted" style="margin-top:14px;font-size:11px;word-break:break-all;">ID: ${escapeHtml(s.id)}</p></div>`;
-  const footer = `<button class="btn btn-secondary" onclick="closeModal()">Tutup</button><button class="btn btn-secondary" onclick="downloadQR('${s.id}')">⬇ Download PNG</button><button class="btn btn-primary" onclick="printQR('${s.id}')">🖨 Cetak</button>`;
-  openModal('📱 QR Code Siswa', body, footer);
-  setTimeout(() => { const target = document.getElementById('qrTarget'); if (target && window.QRCode) { target.innerHTML = ''; new QRCode(target, { text: s.id, width: 200, height: 200, colorDark: '#0b1b3a', colorLight: '#ffffff' }); } }, 50);
+  const schoolName = db.settings.schoolName || 'SEKOLAH DIGITAL';
+  
+  const body = `
+    <div id="qrCardContainer" style="text-align:center; padding:20px; background:#fff; border-radius:12px; border:2px solid #e2e8f0; max-width:320px; margin:0 auto;">
+      <h4 style="margin:0 0 5px 0; font-size:14px; color:#0b1b3a; text-transform:uppercase;">${escapeHtml(schoolName)}</h4>
+      <p style="margin:0 0 15px 0; font-size:10px; color:#64748b;">Kartu Identitas Siswa</p>
+      
+      <div id="qrTarget" style="display:inline-block; padding:10px; background:#fff; border:1px solid #e2e8f0; border-radius:8px;"></div>
+      
+      <h3 style="margin:15px 0 2px 0; font-size:16px; color:#0f172a;">${escapeHtml(s.name)}</h3>
+      <p style="margin:0; font-size:12px; font-weight:600; color:#2563eb;">NIS: ${escapeHtml(s.nis)}</p>
+      <p style="margin:2px 0 0 0; font-size:12px; color:#64748b;">Kelas: ${escapeHtml(getClassName(s.classId))}</p>
+    </div>
+  `;
+  
+  const footer = `
+    <button class="btn btn-secondary" onclick="closeModal()">Tutup</button>
+    <button class="btn btn-secondary" onclick="downloadQR('${s.id}')">⬇ Download Gambar</button>
+    <button class="btn btn-primary" onclick="printQR('${s.id}')">🖨 Cetak</button>
+  `;
+  
+  openModal('📱 Kartu QR Siswa', body, footer);
+  
+  // Generate QR ke dalam target
+  setTimeout(() => { 
+    const target = document.getElementById('qrTarget'); 
+    if (target && window.QRCode) { 
+      target.innerHTML = ''; 
+      new QRCode(target, { text: s.id, width: 180, height: 180, colorDark: '#0b1b3a', colorLight: '#ffffff' }); 
+    } 
+  }, 50);
+}
+
+// Fungsi Helper untuk menggambar Kartu QR ke Canvas (untuk Download & Print)
+function generateCardCanvas(studentId, callback) {
+  const s = db.students.find(x => x.id === studentId);
+  const schoolName = db.settings.schoolName || 'SEKOLAH DIGITAL';
+  const qrCanvasElement = document.getElementById('qrTarget')?.querySelector('canvas');
+  
+  if (!qrCanvasElement) return toast('QR belum siap', 'error');
+
+  // Buat canvas baru untuk kartu
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const width = 400;
+  const height = 520;
+  canvas.width = width;
+  canvas.height = height;
+
+  // Background Putih
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+
+  // Border Luar
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(2, 2, width - 4, height - 4);
+
+  // Header Biru
+  ctx.fillStyle = '#0b1b3a';
+  ctx.fillRect(0, 0, width, 70);
+
+  // Teks Nama Sekolah
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 18px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(schoolName.toUpperCase(), width / 2, 35);
+  ctx.font = '12px Inter, sans-serif';
+  ctx.fillStyle = '#93c5fd';
+  ctx.fillText('KARTU IDENTITAS SISWA', width / 2, 55);
+
+  // Gambar QR Code
+  ctx.drawImage(qrCanvasElement, (width - 220) / 2, 100, 220, 220);
+
+  // Teks Nama Siswa
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 22px Inter, sans-serif';
+  ctx.fillText(s.name, width / 2, 370);
+
+  // Teks NIS
+  ctx.fillStyle = '#2563eb';
+  ctx.font = 'bold 16px Inter, sans-serif';
+  ctx.fillText(`NIS: ${s.nis}`, width / 2, 400);
+
+  // Teks Kelas
+  ctx.fillStyle = '#64748b';
+  ctx.font = '14px Inter, sans-serif';
+  ctx.fillText(`Kelas: ${getClassName(s.classId)}`, width / 2, 425);
+
+  // Garis pemisah
+  ctx.beginPath();
+  ctx.moveTo(50, 450);
+  ctx.lineTo(width - 50, 450);
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // ID Unik kecil di bawah
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '10px monospace';
+  ctx.fillText(`ID: ${s.id}`, width / 2, 475);
+
+  callback(canvas);
 }
 
 function downloadQR(studentId) {
-  const s = db.students.find(x => x.id === studentId); const target = document.getElementById('qrTarget'); const canvas = target?.querySelector('canvas');
-  if (!canvas) return toast('QR belum siap', 'error');
-  const a = document.createElement('a'); a.href = canvas.toDataURL('image/png'); a.download = `QR_${(s?.name || 'siswa').replace(/\s+/g, '_')}.png`; a.click(); toast('QR Code diunduh', 'success');
+  const s = db.students.find(x => x.id === studentId);
+  
+  generateCardCanvas(studentId, (canvas) => {
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = `Kartu_QR_${(s?.name || 'siswa').replace(/\s+/g, '_')}.png`;
+    a.click();
+    toast('Kartu QR berhasil diunduh', 'success');
+  });
 }
 
 function printQR(studentId) {
-  const s = db.students.find(x => x.id === studentId); const canvas = document.getElementById('qrTarget')?.querySelector('canvas');
-  if (!canvas) return toast('QR belum siap', 'error');
-  const win = window.open('', '_blank');
-  win.document.write(`<html><head><title>QR ${escapeHtml(s.name)}</title><style>body{font-family:sans-serif;text-align:center;padding:40px;} h2{margin:8px 0;} p{color:#555;margin:4px;}</style></head><body><h2>${escapeHtml(s.name)}</h2><p>${escapeHtml(s.nis)} • ${escapeHtml(getClassName(s.classId))}</p><img src="${canvas.toDataURL()}" style="margin:20px 0;width:240px;"><p style="font-size:11px;">ID: ${escapeHtml(s.id)}</p><script>window.onload=()=>{window.print();}<\/script></body></html>`); win.document.close();
+  const s = db.students.find(x => x.id === studentId);
+  
+  generateCardCanvas(studentId, (canvas) => {
+    const imgData = canvas.toDataURL('image/png');
+    const win = window.open('', '_blank');
+    win.document.write(`
+      <html>
+      <head>
+        <title>Cetak QR - ${escapeHtml(s.name)}</title>
+        <style>
+          body { font-family: sans-serif; text-align: center; padding: 20px; }
+          img { max-width: 100%; height: auto; margin-top: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+          @media print {
+            body { padding: 0; }
+            img { box-shadow: none; margin: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <img src="${imgData}">
+        <script>window.onload=()=>{window.print();}<\/script>
+      </body>
+      </html>
+    `);
+    win.document.close();
+  });
 }
 
 // KEHADIRAN
